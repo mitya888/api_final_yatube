@@ -1,13 +1,20 @@
+from django.db.models.query import QuerySet
 from django.shortcuts import get_object_or_404
-from rest_framework import viewsets, filters
-from rest_framework.permissions import IsAuthenticatedOrReadOnly, \
-    IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import filters, mixins, viewsets
+from rest_framework.permissions import (IsAuthenticated,
+                                        IsAuthenticatedOrReadOnly)
 
-from .models import Post, Group, Follow
+from .models import Follow, Group, Post
 from .permission import IsAuthorOrReadOnly
-from .serializers import CommentSerializer, PostSerializer, GroupSerializer, \
-    FollowSerializer
+from .serializers import (CommentSerializer, FollowSerializer, GroupSerializer,
+                          PostSerializer)
+
+
+class GetPostViewSetTemplate(
+    mixins.CreateModelMixin, mixins.ListModelMixin, viewsets.GenericViewSet
+):
+    pass
 
 
 class PostViewSet(viewsets.ModelViewSet):
@@ -28,27 +35,38 @@ class GroupViewSet(viewsets.ModelViewSet):
 
 
 class CommentViewSet(viewsets.ModelViewSet):
+
     serializer_class = CommentSerializer
     permission_classes = [IsAuthenticatedOrReadOnly, IsAuthorOrReadOnly]
 
-    def perform_create(self, serializer):
-        post = get_object_or_404(Post, id=self.kwargs.get('id'))
-        serializer.save(post=post, author=self.request.user)
+    def get_post(self):
+        return get_object_or_404(Post, pk=self.kwargs["post_id"])
 
     def get_queryset(self):
-        post = get_object_or_404(Post, id=self.kwargs.get('id'))
-        queryset = post.comments.all()
+        post = self.get_post()
+        queryset = post.comments
+
+        if isinstance(queryset, QuerySet):
+            # Ensure queryset is re-evaluated on each request.
+            queryset = queryset.all()
+
         return queryset
 
+    def perform_create(self, serializer):
+        serializer.save(author=self.request.user)
 
-class FollowViewSet(viewsets.ModelViewSet):
+
+class FollowViewSet(GetPostViewSetTemplate):
     serializer_class = FollowSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [filters.SearchFilter]
-    search_fields = ['user__username', 'following__username']
+    search_fields = ["user__username", "following__username"]
+
+    def get_queryset(self):
+        queryset = Follow.objects.filter(following=self.request.user)
+        if isinstance(queryset, QuerySet):
+            queryset = queryset.all()
+        return queryset
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
-
-    def get_queryset(self):
-        return Follow.objects.filter(following=self.request.user)
