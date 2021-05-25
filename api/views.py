@@ -35,7 +35,6 @@ class GroupViewSet(viewsets.ModelViewSet):
 
 
 class CommentViewSet(viewsets.ModelViewSet):
-
     serializer_class = CommentSerializer
     permission_classes = [IsAuthenticatedOrReadOnly, IsAuthorOrReadOnly]
 
@@ -45,11 +44,8 @@ class CommentViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         post = self.get_post()
         queryset = post.comments
-
         if isinstance(queryset, QuerySet):
-            # Ensure queryset is re-evaluated on each request.
             queryset = queryset.all()
-
         return queryset
 
     def perform_create(self, serializer):
